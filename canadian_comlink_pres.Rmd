@@ -1,0 +1,314 @@
+---
+title: "Shaw Wireless Launch Analysis"
+output:
+  html_document:
+    code_folding: hide
+date: '2022-06-13'
+---
+
+```{r, warning=F, message=F}
+library(dplyr)
+library(flexdashboard)
+library(plotly)
+library(reshape2)
+
+#install.packages("reshape2")
+#install.packages("ISOweek")
+library("readxl")
+library("openxlsx")
+
+
+promotion <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 3) %>% mutate(Date = as.Date(`Start Date`, "%m/%d/%y"),
+                                                                                        `End Date` = as.Date(`End Date`, "%m/%d/%y")) %>% dplyr::select(-Source,-`Start Date`, -`End Date`)
+win_vol_nation <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 4) %>% 
+  mutate(win_vol_nation = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+loss_vol_nation <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 5) %>% mutate(loss_vol_nation = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+net_vol_nation <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 6) %>% mutate(net_vol_nation = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+win_vol_prov_nation <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 7) %>% 
+  mutate(win_vol_prov_nation = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+loss_vol_prov_nation <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 8) %>% 
+  mutate(loss_vol_prov_nation = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+vancouver_win <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 9) %>% mutate(vancouver_win = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+vancouver_loss <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 10) %>% mutate(vancouver_loss = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+vancouver_net <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 11) %>% mutate(vancouver_net = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+toronto_win <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 12) %>% mutate(toronto_win = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+toronto_loss <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 13) %>% mutate(toronto_loss = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+toronto_net <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 14) %>% mutate(toronto_net = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+montreal_win <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 15) %>% mutate(montreal_win = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+montreal_loss <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 16) %>% mutate(montreal_loss = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+montreal_net <- read_excel("Canadian Data for Analysis 9.20_1.xlsx", sheet = 17) %>% mutate(montreal_net = Value, Date = as.Date(Date, "%m/%d/%y")) %>% dplyr::select(-Value)
+#c(colnames(my_data%>% dplyr::select(-`Service Provider`,-`Type`,-`Family`)))
+
+nation_df <- win_vol_nation %>% left_join(loss_vol_nation, by =c("Service Provider", "Type","Family","Date")) %>% 
+  left_join(net_vol_nation, by =c("Service Provider", "Type","Family","Date"))
+
+nation_prov_df <- win_vol_prov_nation %>% left_join(loss_vol_prov_nation, by =c("PROVINCE ID","PROVINCE","Carrier","Date"))
+
+```
+
+## Setup
+
+#### Freedom Mobile launched a new sub-brand, Shaw Wireless. To determine the impact this has had on the Canadian Wireless market and my client Bell Wireless, I will need to determine if the new launch did affect the market and if Bell Wireless was impacted. Given there is only so much market share, this new launch is expected to pull wins away from the rest of the Canadian market.
+
+## Freedom Mobile's launch effect in Alberta and B.C.
+
+#### To start the week of 7/26, Freedom Mobile saw its largest uptick in wins from the start of 2020. Then, with the launch of Shaw Wireless on 7/30, there was an even larger uptick in wins from that week (8/2/2020) which was seen across Alberta and British Columbia. 
+
+#### The increase in wins from the Shaw Wireless launch is not correlated with another promotion. across the rest of the Canadian, the remaining Providences saw a large uptick from the 8/21 promotions which featured the new handset: Samsung Galaxy Note20 5G
+
+```{r, warning=F, message=F}
+`%notin%` <- Negate(`%in%`)
+
+library("ISOweek")
+
+freedom_nation_prov_df_alb <- nation_prov_df %>% filter(`Carrier` == "Freedom Mobile", PROVINCE %in% c('Alberta')) %>% arrange(Date) %>% mutate(Week_End = ISOweek2date(strftime(Date+7, format = "%Y-W%U-6"))) %>% group_by(Carrier,Week_End) %>% 
+  dplyr::summarise(win_vol_prov_nation = sum(win_vol_prov_nation),
+                   loss_vol_prov_nation = sum(loss_vol_prov_nation))
+
+freedom_nation_prov_df_bc <- nation_prov_df %>% filter(`Carrier` == "Freedom Mobile", PROVINCE %in% c('British Columbia / Colombie-Britannique')) %>% arrange(Date) %>% mutate(Week_End = ISOweek2date(strftime(Date+7, format = "%Y-W%U-6"))) %>% group_by(Carrier,Week_End) %>% 
+  dplyr::summarise(win_vol_prov_nation = sum(win_vol_prov_nation),
+                   loss_vol_prov_nation = sum(loss_vol_prov_nation))
+
+freedom_nation_prov_not_alb_bc <- nation_prov_df %>% filter(`Carrier` == "Freedom Mobile", PROVINCE %notin% c('Alberta','British Columbia / Colombie-Britannique')) %>% arrange(Date) %>% mutate(Week_End = ISOweek2date(strftime(Date+7, format = "%Y-W%U-6"))) %>% group_by(Carrier,Week_End) %>% 
+  dplyr::summarise(win_vol_prov_nation = sum(win_vol_prov_nation),
+                   loss_vol_prov_nation = sum(loss_vol_prov_nation))
+
+
+vline <- function(x = 0, color = "blue") {
+  list(
+    type = "line",
+    y0 = 0,
+    y1 = 0.8,
+    yref = "paper",
+    x0 = x,
+    x1 = x,
+    line = list(color = color, dash="dot")
+  )
+}
+
+shaw_intro <- list(
+  xref = 'paper',
+  x = 0.5,
+  y = 5000,
+  text = paste("Shaw Wireless Launch<br>7/30/22"),
+    font = list(family = 'Arial',
+                size = 16,
+                color = 'rgba(67,67,67,1)'),
+  showarrow= F)
+
+fig1 <- freedom_nation_prov_df_alb %>% plot_ly(x= ~Week_End, y= ~win_vol_prov_nation, type = "scatter", mode = "lines", 
+        line = list(color = "blue",width = 2),
+        name = "Alberta wins",
+        text = paste("Week End:", freedom_nation_prov_df_alb$Week_End, "<br>Wins:", format(freedom_nation_prov_df_alb$win_vol_prov_nation, big.mark = ",")),
+        hoverinfo = 'text') %>%
+  add_trace(x= ~Week_End, y= ~loss_vol_prov_nation, type = "scatter", mode = "lines", 
+        line = list(color = "red",width = 2),
+        name = "Alberta loss",
+        text = paste("Week End:", freedom_nation_prov_df_alb$Week_End, "<br>Losses:", format(freedom_nation_prov_df_alb$loss_vol_prov_nation, big.mark = ",")),
+        hoverinfo = 'text')
+
+fig1 <- fig1 %>% layout(annotations = shaw_intro, shapes = list(vline(as.Date("07/30/2020", format= "%m/%d/%y"))),
+                      yaxis = list(title = "Volume"),
+                      xaxis = list(title = "Week End"),
+                      title = "Freedom Mobile Alberta Wins/Losses Trend")
+
+
+fig2 <- freedom_nation_prov_df_bc %>% plot_ly(x= ~Week_End, y= ~win_vol_prov_nation, type = "scatter", mode = "lines", 
+        line = list(color = "blue",width = 2),
+        name = "B.C wins",
+        text = paste("Week End:", freedom_nation_prov_df_bc$Week_End, "<br>Wins:", format(freedom_nation_prov_df_bc$win_vol_prov_nation, big.mark = ",")),
+        hoverinfo = 'text') %>%
+  add_trace(x= ~Week_End, y= ~loss_vol_prov_nation, type = "scatter", mode = "lines", 
+        line = list(color = "red",width = 2),
+        name = "B.C loss",
+        text = paste("Week End:", freedom_nation_prov_df_bc$Week_End, "<br>Losses:", format(freedom_nation_prov_df_bc$loss_vol_prov_nation, big.mark = ",")),
+        hoverinfo = 'text')
+
+fig2 <- fig2 %>% layout(shapes = list(vline(as.Date("07/30/2020", format= "%m/%d/%y"))),
+                      yaxis = list(title = "Volume"),
+                      xaxis = list(title = "Week End"),
+                      title = "Freedom Mobile British Columbia Wins/Losses Trend")
+
+
+fig3 <- freedom_nation_prov_not_alb_bc %>% plot_ly(x= ~Week_End, y= ~win_vol_prov_nation, type = "scatter", mode = "lines", 
+        line = list(color = "teal",width = 2),
+        name = "Not Alberta or B.C wins",
+        text = paste("Week End:", freedom_nation_prov_not_alb_bc$Week_End, "<br>Wins:", format(freedom_nation_prov_not_alb_bc$win_vol_prov_nation, big.mark = ",")),
+        hoverinfo = 'text') %>%
+  add_trace(x= ~Week_End, y= ~loss_vol_prov_nation, type = "scatter", mode = "lines", 
+        line = list(color = "orange",width = 2),
+        name = "Not Alberta or B.C loss",
+        text = paste("Week End:", freedom_nation_prov_not_alb_bc$Week_End, "<br>Losses:", format(freedom_nation_prov_not_alb_bc$loss_vol_prov_nation, big.mark = ",")),
+        hoverinfo = 'text')
+
+fig3 <- fig3 %>% layout(shapes = list(vline(as.Date("07/30/2020", format= "%m/%d/%y"))),
+                      yaxis = list(title = "Volume"),
+                      xaxis = list(title = "Week End"),
+                      title = "Freedom Mobile British Columbia Wins/Losses Trend")
+
+
+subplot(fig1,fig2,fig3,  nrows= 3, shareX = T)
+
+
+
+
+
+```
+
+## Canadian Wireless market reaction{.tabset .tabset-fade}
+
+#### With the inclusion of Shaw Wireless in the Alberta/ B.C. market, notable competing carriers saw an average loss of 2000 volume of market share from 8/1/2020 to 8/22/2020:
+* Telus Wireless
+* Bell Wireless
+* Rogers Wireless
+* Fido
+
+#### Each of the brands above ran promotions with bundle deals, money off phones, and data plans. It wasn't until the Samsung Galaxy Note 20 5G that companies saw their wins bounce back from the losses.
+
+### Market Wins 
+
+```{r, warning=F, message=F}
+brands_nation_prov_df_alb <- nation_prov_df %>% filter(`PROVINCE` %in% c('Alberta', 'British Columbia / Colombie-Britannique'),
+                                                       Date >= as.Date("06/21/2020", format= "%m/%d/%y"),
+                                                       Date <=  as.Date("10/01/2020", format= "%m/%d/%y")) %>% 
+  arrange(Date) %>% 
+  mutate(Week_End = ISOweek2date(strftime(Date+7, format = "%Y-W%U-6"))) %>% 
+  group_by(Carrier,Week_End) %>% 
+  dplyr::summarise(win_vol_prov_nation = sum(win_vol_prov_nation),
+                   loss_vol_prov_nation = sum(loss_vol_prov_nation))
+
+shaw_intro_brands <- list(
+  xref = 'paper',
+  x = 0.2,
+  y = 14000,
+  text = paste("Shaw Wireless Launch<br>7/30/22"),
+    font = list(family = 'Arial',
+                size = 16,
+                color = 'rgba(67,67,67,1)'),
+  showarrow= F)
+
+
+fig1 <- brands_nation_prov_df_alb %>% plot_ly(x= ~Week_End, y= ~win_vol_prov_nation, type = "scatter", mode = "lines", 
+                                              color = ~Carrier,
+        line = list(color = ~Carrier,width = 2),
+        name = ~Carrier,
+        text = paste("Week End:", brands_nation_prov_df_alb$Week_End, 
+                     "<br>Carrier:", brands_nation_prov_df_alb$Carrier, 
+                     "<br>Wins:", format(brands_nation_prov_df_alb$win_vol_prov_nation, big.mark = ",")),
+        hoverinfo = 'text')
+
+fig1 <- fig1 %>% layout(annotations = shaw_intro_brands, shapes = list(vline(as.Date("07/30/2020", format= "%m/%d/%y"))),
+                      yaxis = list(title = "Volume"),
+                      xaxis = list(title = "Week End"),
+                      title = "Carrier Wins across Alberta & B.C.")
+
+fig1
+```
+
+
+### Market Losses 
+
+
+```{r, warning=F, message=F}
+fig1 <- brands_nation_prov_df_alb %>% plot_ly(x= ~Week_End, y= ~loss_vol_prov_nation, type = "scatter", mode = "lines", 
+                                              color = ~Carrier,
+        line = list(color = ~Carrier,width = 2),
+        name = ~Carrier,
+        text = paste("Week End:", brands_nation_prov_df_alb$Week_End, 
+                     "<br>Carrier:", brands_nation_prov_df_alb$Carrier, 
+                     "<br>Losses:", format(brands_nation_prov_df_alb$loss_vol_prov_nation, big.mark = ",")),
+        hoverinfo = 'text')
+
+fig1 <- fig1 %>% layout(annotations = shaw_intro_brands, shapes = list(vline(as.Date("07/30/2020", format= "%m/%d/%y"))),
+                      yaxis = list(title = "Volume"),
+                      xaxis = list(title = "Week End"),
+                      title = "Carrier Losses across Alberta & B.C.")
+
+fig1
+```
+
+## Bell Wireless
+
+#### Bell Wireless did not find win market growth after the announcement of removing subsidized plans in favor of Bells SmartPay. Add in the favorable pricing Shaw Wireless, which gained Freedom Mobile market share, Bell Wireless did not see any growth until the launch of the Samsung Galaxy Note 20 5G.
+
+```{r, warning=F, message=F}
+bell_promo <- unique(promotion %>% filter(`Followed Carrier` == "Bell", Date >= as.Date("06/21/2020", format= "%m/%d/%y"),
+                                                       Date <=  as.Date("10/01/2020", format= "%m/%d/%y"),
+                                          Type %notin% c("Promotion")) %>% 
+                       arrange(Date) %>% 
+                       mutate(Carrier = ifelse(`Followed Carrier` == "Bell", "Bell Wireless",`Followed Carrier`),
+                              Week_End = ISOweek2date(strftime(Date+7, format = "%Y-W%U-6"))) %>% 
+  dplyr::select(Carrier, Type, Week_End))
+
+
+bell_alb_bc_df <- nation_prov_df %>% filter(`Carrier` == "Bell Wireless", `PROVINCE` %in% c('Alberta', 'British Columbia / Colombie-Britannique'),
+                                                       Date >= as.Date("06/21/2020", format= "%m/%d/%y"),
+                                                       Date <=  as.Date("10/01/2020", format= "%m/%d/%y")) %>% 
+  arrange(Date) %>% 
+  mutate(Week_End = ISOweek2date(strftime(Date+7, format = "%Y-W%U-6"))) %>% 
+  group_by(Carrier,Week_End) %>% 
+  dplyr::summarise(win_vol_prov_nation = sum(win_vol_prov_nation),
+                   loss_vol_prov_nation = sum(loss_vol_prov_nation))
+
+bell_df <- bell_alb_bc_df %>% left_join(bell_promo, by = c("Carrier", "Week_End"))
+
+shaw_intro_bell<- list(
+  xref = 'paper',
+  x = 0.2,
+  y = 14000,
+  text = paste("Shaw Wireless Launch<br>7/30/22"),
+    font = list(family = 'Arial',
+                size = 16,
+                color = 'rgba(67,67,67,1)'),
+  showarrow= F)
+
+
+m <- bell_df %>% filter(!is.na(Type))
+
+
+
+fig1 <- bell_df %>% plot_ly(x= ~Week_End, y= ~loss_vol_prov_nation, type = "scatter", mode = "lines", 
+        line = list(color = "red",width = 2),
+        name = "Losses",
+        text = paste("Week End:", bell_df$Week_End, 
+                     "<br>Losses:", format(bell_df$loss_vol_prov_nation, big.mark = ",")),
+        hoverinfo = 'text') %>%
+  add_trace(x= ~Week_End, y= ~win_vol_prov_nation, type = "scatter", mode = "lines", 
+        line = list(color = "blue",width = 2),
+        name = "Wins",
+        text = paste("Week End:", bell_df$Week_End, 
+                     "<br>Wins:", format(bell_df$win_vol_prov_nation, big.mark = ",")),
+        hoverinfo = 'text')
+
+fig1 <- fig1 %>% layout(annotations = shaw_intro_bell, shapes = list(vline(as.Date("07/30/2020", format= "%m/%d/%y"))),
+                      yaxis = list(title = "Volume"),
+                      xaxis = list(title = "Week End"),
+                      title = "Bell Wireless - Alberta & B.C.")%>%
+  add_annotations(x = m$Week_End,
+  y = m$loss_vol_prov_nation,
+  text = m$Type,
+  xref = "x",
+  yref = "y",
+  showarrow = TRUE,
+  arrowhead = 7,
+  ax = -20,
+  ay = -40)
+
+fig1
+
+```
+
+
+### Conclusion
+
+#### Shaw Wireless had an effective launch in Columbia and Alberta. The new carrier helped boost Freedom Wireless by about 3000 wins within the market. These wins were found through taking market from Telus Wireless, Bell Wireless, Rogers Wireless, and Fido: each lossing about 2000 points of market share in the first few weeks of August.
+
+#### Bell Wireless's plan change did not yield market share from Alberta and B.C. which was offset by Shaw Wireless's strategy.
+
+#### Additional analysis is needed on the effectiveness of Shaw Wireless's strategy. 
+* What demographic did they take market share from?
+* Was their lower priced plans the cause for the losses among Bell, Rogers, Telus, and Fido?
+  + If so, is Bell Wireless missing a key demographic in their strategy for market retention and growth?
+  
+  
+
